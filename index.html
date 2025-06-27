@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel数据映射工具</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .app-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        .app-title {
+            color: #3c4858;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .mapping-container {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        .step-container {
+            margin-bottom: 25px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #6c757d;
+        }
+        .step-title {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        .step-number {
+            background-color: #6c757d;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .step-container.active {
+            border-left-color: #007bff;
+            background-color: #f0f7ff;
+        }
+        .step-container.active .step-number {
+            background-color: #007bff;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 9999;
+        }
+        .mapping-row {
+            transition: background-color 0.2s;
+        }
+        .mapping-row:hover {
+            background-color: #f0f7ff;
+        }
+        .btn-primary {
+            background-color: #4a6cf7;
+            border-color: #4a6cf7;
+        }
+        .btn-primary:hover {
+            background-color: #3a5bd9;
+            border-color: #3a5bd9;
+        }
+        .btn-success {
+            background-color: #36b37e;
+            border-color: #36b37e;
+        }
+        .btn-success:hover {
+            background-color: #2e9a6a;
+            border-color: #2e9a6a;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1 class="app-title text-center">Excel数据映射工具</h1>
+        
+        <!-- 步骤1: 文件上传 -->
+        <div id="step1" class="step-container active">
+            <div class="step-title">
+                <div class="step-number">1</div>
+                <h3>文件上传</h3>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="inputFile" class="form-label">输入文件</label>
+                    <input class="form-control" type="file" id="inputFile" accept=".xlsx,.xls">
+                    <div class="form-text">请选择包含源数据的Excel文件</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="outputFile" class="form-label">输出模板</label>
+                    <input class="form-control" type="file" id="outputFile" accept=".xlsx,.xls">
+                    <div class="form-text">请选择作为输出模板的Excel文件</div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button id="loadFilesBtn" class="btn btn-primary">
+                        <i class="bi bi-arrow-right"></i> 下一步
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤2: 工作表及表头选择 -->
+        <div id="step2" class="step-container">
+            <div class="step-title">
+                <div class="step-number">2</div>
+                <h3>工作表及表头选择</h3>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="inputSheet" class="form-label">输入工作表</label>
+                    <select class="form-select" id="inputSheet"></select>
+                </div>
+                <div class="col-md-6">
+                    <label for="outputSheet" class="form-label">输出工作表</label>
+                    <select class="form-select" id="outputSheet"></select>
+                </div>
+            </div>
+            <div class="row g-3 mt-2">
+                <div class="col-md-6">
+                    <label for="inputHeaderRow" class="form-label">输入表头行</label>
+                    <input type="number" class="form-control" id="inputHeaderRow" value="1" min="1">
+                </div>
+                <div class="col-md-6">
+                    <label for="outputHeaderRow" class="form-label">输出表头行</label>
+                    <input type="number" class="form-control" id="outputHeaderRow" value="2" min="1">
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button id="backToStep1Btn" class="btn btn-outline-secondary me-2">上一步</button>
+                    <button id="loadHeadersBtn" class="btn btn-primary">下一步</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤3: 列映射设置 -->
+        <div id="step3" class="step-container">
+            <div class="step-title">
+                <div class="step-number">3</div>
+                <h3>列映射设置</h3>
+            </div>
+            <div class="mapping-container">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>输出列</th>
+                            <th>映射来源</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mappingTable">
+                        <!-- 这里将通过JavaScript动态填充 -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <input type="text" id="mappingName" class="form-control" placeholder="映射配置名称">
+                        <button id="saveMappingBtn" class="btn btn-outline-primary">保存配置</button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <select id="savedMappings" class="form-select"></select>
+                        <button id="loadMappingBtn" class="btn btn-outline-secondary">加载</button>
+                        <button id="deleteMappingBtn" class="btn btn-outline-danger">删除</button>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <button id="backToStep2Btn" class="btn btn-outline-secondary me-2">上一步</button>
+                    <button id="goToStep4Btn" class="btn btn-primary">下一步</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤4: 处理设置 -->
+        <div id="step4" class="step-container">
+            <div class="step-title">
+                <div class="step-number">4</div>
+                <h3>处理设置</h3>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="inputStartRow" class="form-label">输入文件起始行</label>
+                    <input type="number" class="form-control" id="inputStartRow" value="2" min="1">
+                    <div class="form-text">开始处理数据的行号(包含该行)</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="outputStartRow" class="form-label">输出文件起始行</label>
+                    <input type="number" class="form-control" id="outputStartRow" value="3" min="1">
+                    <div class="form-text">开始写入数据的行号(包含该行)</div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button id="backToStep3Btn" class="btn btn-outline-secondary me-2">上一步</button>
+                    <button id="processDataBtn" class="btn btn-success">
+                        <i class="bi bi-play-fill"></i> 开始处理数据
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤5: 结果 -->
+        <div id="step5" class="step-container">
+            <div class="step-title">
+                <div class="step-number">5</div>
+                <h3>处理结果</h3>
+            </div>
+            <div id="resultContainer" class="alert alert-info mb-3">
+                <!-- 处理结果消息 -->
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <button id="backToStep4Btn" class="btn btn-outline-secondary me-2">返回设置</button>
+                    <button id="downloadBtn" class="btn btn-success">
+                        <i class="bi bi-download"></i> 下载处理后的文件
+                    </button>
+                    <button id="startNewBtn" class="btn btn-outline-primary ms-2">开始新的处理</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 加载指示器 -->
+    <div id="loading" class="loading hidden">
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">处理中...</span>
+            </div>
+            <h5 class="mt-2">数据处理中，请稍候...</h5>
+        </div>
+    </div>
+    
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {        
+            // 全局变量
+            let inputWorkbook = null;
+            let outputWorkbook = null;
+            let inputHeaders = [];
+            let outputHeaders = [];
+            let processedWorkbook = null;
+            
+            // 元素引用
+            const steps = document.querySelectorAll('.step-container');
+            const inputFileEl = document.getElementById('inputFile');
+            const outputFileEl = document.getElementById('outputFile');
+            const loadFilesBtn = document.getElementById('loadFilesBtn');
+            const inputSheetEl = document.getElementById('inputSheet');
+            const outputSheetEl = document.getElementById('outputSheet');
+            const inputHeaderRowEl = document.getElementById('inputHeaderRow');
+            const outputHeaderRowEl = document.getElementById('outputHeaderRow');
+            const loadHeadersBtn = document.getElementById('loadHeadersBtn');
+            const mappingTableEl = document.getElementById('mappingTable');
+            const saveMappingBtn = document.getElementById('saveMappingBtn');
+            const mappingNameEl = document.getElementById('mappingName');
+            const savedMappingsEl = document.getElementById('savedMappings');
+            const loadMappingBtn = document.getElementById('loadMappingBtn');
+            const deleteMappingBtn = document.getElementById('deleteMappingBtn');
+            const inputStartRowEl = document.getElementById('inputStartRow');
+            const outputStartRowEl = document.getElementById('outputStartRow');
+            const processDataBtn = document.getElementById('processDataBtn');
+            const resultContainerEl = document.getElementById('resultContainer');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const loadingEl = document.getElementById('loading');
+            const backToStep1Btn = document.getElementById('backToStep1Btn');
+            const backToStep2Btn = document.getElementById('backToStep2Btn');
+            const backToStep3Btn = document.getElementById('backToStep3Btn');
+            const backToStep4Btn = document.getElementById('backToStep4Btn');
+            const goToStep4Btn = document.getElementById('goToStep4Btn');
+            const startNewBtn = document.getElementById('startNewBtn');
+            
+            // 步骤导航
+            function goToStep(stepIndex) {
+                steps.forEach((step, index) => {
+                    if (index === stepIndex - 1) {
+                        step.classList.add('active');
+                    } else {
+                        step.classList.remove('active');
+                    }
+                });
+            }
+            
+            // 工具函数
+            function showLoading() {
+                loadingEl.classList.remove('hidden');
+            }
+            
+            function hideLoading() {
+                loadingEl.classList.add('hidden');
+            }
+            
+            function showAlert(message, type = 'info') {
+                resultContainerEl.textContent = message;
+                resultContainerEl.className = `alert alert-${type} mb-3`;
+            }
+            
+            // 读取Excel文件
+            function readExcelFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            resolve(workbook);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    
+                    reader.onerror = function(error) {
+                        reject(error);
+                    };
+                    
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+            
+            // 从工作表获取表头行
+            function getHeaders(workbook, sheetName, headerRow) {
+                const worksheet = workbook.Sheets[sheetName];
+                const range = XLSX.utils.decode_range(worksheet['!ref']);
+                const headers = [];
+                
+                for (let col = range.s.c; col <= range.e.c; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: headerRow - 1, c: col });
+                    const cell = worksheet[cellAddress];
+                    
+                    if (cell && cell.v) {
+                        headers.push({
+                            name: cell.v.toString().trim(),
+                            col: col
+                        });
+                    }
+                }
+                
+                return headers;
+            }
+            
+            // 保存映射配置
+            function saveMappingConfig() {
+                const mappingName = mappingNameEl.value.trim();
+                if (!mappingName) {
+                    alert('请输入映射配置名称');
+                    return;
+                }
+                
+                // 收集映射关系
+                const mappings = [];
+                document.querySelectorAll('#mappingTable tr').forEach(row => {
+                    const outputCol = row.getAttribute('data-output-col');
+                    const outputColName = row.getAttribute('data-output-name');
+                    const sourceSelect = row.querySelector('select');
+                    const sourceInfo = sourceSelect.value;
+                    
+                    if (sourceInfo) {
+                        mappings.push({
+                            outputCol,
+                            outputColName,
+                            sourceInfo
+                        });
+                    }
+                });
+                
+                // 保存配置
+                const config = {
+                    name: mappingName,
+                    inputHeaderRow: inputHeaderRowEl.value,
+                    outputHeaderRow: outputHeaderRowEl.value,
+                    mappings
+                };
+                
+                // 保存到localStorage
+                let savedConfigs = JSON.parse(localStorage.getItem('excelMappingConfigs') || '{}');
+                savedConfigs[mappingName] = config;
+                localStorage.setItem('excelMappingConfigs', JSON.stringify(savedConfigs));
+                
+                // 更新下拉列表
+                updateSavedMappingsList();
+                
+                alert(`映射配置"${mappingName}"已保存`);
+            }
+            
+            // 更新保存的映射配置列表
+            function updateSavedMappingsList() {
+                savedMappingsEl.innerHTML = '';
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- 选择保存的配置 --';
+                savedMappingsEl.appendChild(defaultOption);
+                
+                const savedConfigs = JSON.parse(localStorage.getItem('excelMappingConfigs') || '{}');
+                
+                for (const name in savedConfigs) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    savedMappingsEl.appendChild(option);
+                }
+            }
+            
+            // 加载映射配置
+            function loadMappingConfig(configName) {
+                const savedConfigs = JSON.parse(localStorage.getItem('excelMappingConfigs') || '{}');
+                const config = savedConfigs[configName];
+                
+                if (!config) {
+                    alert('找不到指定的配置');
+                    return;
+                }
+                
+                // 设置表头行
+                inputHeaderRowEl.value = config.inputHeaderRow;
+                outputHeaderRowEl.value = config.outputHeaderRow;
+                
+                // 重新加载表头
+                loadHeadersBtn.click();
+                
+                // 设置映射关系 (在表头加载完成后处理)
+                setTimeout(() => {
+                    document.querySelectorAll('#mappingTable tr').forEach(row => {
+                        const outputCol = row.getAttribute('data-output-col');
+                        const outputColName = row.getAttribute('data-output-name');
+                        
+                        // 查找对应的映射
+                        const mapping = config.mappings.find(m => 
+                            m.outputCol === outputCol && m.outputColName === outputColName);
+                        
+                        if (mapping) {
+                            const sourceSelect = row.querySelector('select');
+                            sourceSelect.value = mapping.sourceInfo;
+                        }
+                    });
+                }, 500);
+            }
+            
+            // 删除保存的配置
+            function deleteMappingConfig() {
+                const configName = savedMappingsEl.value;
+                
+                if (!configName) {
+                    alert('请选择要删除的配置');
+                    return;
+                }
+                
+                if (confirm(`确定要删除映射配置"${configName}"吗？`)) {
+                    const savedConfigs = JSON.parse(localStorage.getItem('excelMappingConfigs') || '{}');
+                    delete savedConfigs[configName];
+                    localStorage.setItem('excelMappingConfigs', JSON.stringify(savedConfigs));
+                    
+                    updateSavedMappingsList();
+                    alert(`映射配置"${configName}"已删除`);
+                }
+            }
+            
+            // 处理数据
+            async function processData() {
+                showLoading();
+                
+                try {
+                    const inputSheet = inputSheetEl.value;
+                    const outputSheet = outputSheetEl.value;
+                    const inputHeaderRow = parseInt(inputHeaderRowEl.value);
+                    const outputHeaderRow = parseInt(outputHeaderRowEl.value);
+                    const inputStartRow = parseInt(inputStartRowEl.value);
+                    const outputStartRow = parseInt(outputStartRowEl.value);
+                    
+                    // 克隆输出模板
+                    processedWorkbook = XLSX.utils.book_new();
+                    const inputWorksheet = inputWorkbook.Sheets[inputSheet];
+                    const outputWorksheet = outputWorkbook.Sheets[outputSheet];
+                    
+                    // 复制输出模板中的所有内容
+                    const clonedWorksheet = JSON.parse(JSON.stringify(outputWorksheet));
+                    XLSX.utils.book_append_sheet(processedWorkbook, clonedWorksheet, outputSheet);
+                    
+                    // 收集列映射
+                    const columnMappings = [];
+                    document.querySelectorAll('#mappingTable tr').forEach(row => {
+                        const outputCol = parseInt(row.getAttribute('data-output-col'));
+                        const sourceSelect = row.querySelector('select');
+                        
+                        if (sourceSelect.value) {
+                            const [sourceType, sourceValue] = sourceSelect.value.split(':');
+                            columnMappings.push({
+                                outputCol,
+                                sourceType,
+                                sourceValue: sourceType === 'column' ? parseInt(sourceValue) : sourceValue
+                            });
+                        }
+                    });
+                    
+                    // 获取输入表的行数
+                    const range = XLSX.utils.decode_range(inputWorksheet['!ref']);
+                    const lastRow = range.e.r + 1;
+                    
+                    // 处理数据
+                    let processedRows = 0;
+                    
+                    for (let i = inputStartRow; i <= lastRow; i++) {
+                        const rowIndex = i - 1; // 转换为0基索引
+                        
+                        // 跳过空行
+                        let isEmpty = true;
+                        for (let col = range.s.c; col <= range.e.c; col++) {
+                            const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: col });
+                            if (inputWorksheet[cellAddress]) {
+                                isEmpty = false;
+                                break;
+                            }
+                        }
+                        
+                        if (isEmpty) {
+                            continue;
+                        }
+                        
+                        // 计算输出行
+                        const outputRowIndex = outputStartRow - 1 + (i - inputStartRow);
+                        
+                        // 应用列映射
+                        for (const mapping of columnMappings) {
+                            let value = null;
+                            
+                            if (mapping.sourceType === 'column') {
+                                // 直接映射列
+                                const sourceCol = mapping.sourceValue;
+                                const sourceCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: sourceCol });
+                                const sourceCell = inputWorksheet[sourceCellAddress];
+                                
+                                if (sourceCell) {
+                                    value = sourceCell.v;
+                                    
+                                    // 特殊处理: 发票票种转专/普
+                                    if (inputHeaders[sourceCol]?.name === '发票票种') {
+                                        if (value && value.toString().indexOf('增值税专用发票') > -1) {
+                                            value = '专';
+                                        } else if (value && value.toString().indexOf('普通发票') > -1) {
+                                            value = '普';
+                                        }
+                                    }
+                                    
+                                    // 特殊处理: 电票号码添加单引号防止被当作数字处理
+                                    if (inputHeaders[sourceCol]?.name === '数电票号码') {
+                                        value = `${value}`;
+                                    }
+                                    
+                                    // 处理日期
+                                    if (inputHeaders[sourceCol]?.name === '开票日期') {
+                                        const dateParts = value.split(' ');
+                                        if (dateParts.length > 0) {
+                                            value = `${dateParts[0]}`;
+                                        }
+                                    }
+                                    
+                                }
+                            } else if (mapping.sourceType === 'project') {
+                                // 从备注中提取工程项目信息
+                                const remarkCol = inputHeaders.findIndex(h => h.name === '备注');
+                                if (remarkCol >= 0) {
+                                    const remarkCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: remarkCol });
+                                    const remarkCell = inputWorksheet[remarkCellAddress];
+                                    
+                                    if (remarkCell && remarkCell.v) {
+                                        const remark = remarkCell.v.toString();
+                                        if (remark.indexOf('工程名称：') > -1) {
+                                            const parts = remark.split('工程名称：');
+                                            if (parts.length > 1) {
+                                                let projectPart = parts[1];
+                                                if (projectPart.indexOf('\n') > -1) {
+                                                    value = projectPart.substring(0, projectPart.indexOf('\n')).trim();
+                                                } else if (projectPart.indexOf(' ') > -1) {
+    							    value = projectPart.substring(0, projectPart.indexOf(' ')).trim();
+                                                } else {
+                                                    value = projectPart.trim();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (mapping.sourceType === 'address') {
+                                // 从备注中提取工程地址信息
+                                const remarkCol = inputHeaders.findIndex(h => h.name === '备注');
+                                if (remarkCol >= 0) {
+                                    const remarkCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: remarkCol });
+                                    const remarkCell = inputWorksheet[remarkCellAddress];
+                                    
+                                    if (remarkCell && remarkCell.v) {
+                                        const remark = remarkCell.v.toString();
+                                        if (remark.indexOf('工程地址：') > -1) {
+                                            const parts = remark.split('工程地址：');
+                                            if (parts.length > 1) {
+                                                let addressPart = parts[1];
+                                                if (addressPart.indexOf(' ') > -1) {
+                                                    value = addressPart.substring(0, addressPart.indexOf(' ')).trim();
+                                                } else {
+                                                    value = addressPart.trim();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (mapping.sourceType === 'date') {
+                                // 处理日期
+                                const dateCol = inputHeaders.findIndex(h => h.name === '开票日期');
+                                if (dateCol >= 0) {
+                                    const dateCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: dateCol });
+                                    const dateCell = inputWorksheet[dateCellAddress];
+                                    
+                                    if (dateCell && dateCell.v) {
+                                        const dateValue = dateCell.v.toString();
+                                        const dateParts = dateValue.split(' ');
+                                        if (dateParts.length > 0) {
+                                            value = `'${dateParts[0]}`;
+                                        }
+                                    }
+                                }
+                            }// 处理冲红发票备注
+else if (mapping.sourceType === 'ticket') {
+    // 检查金额（含税）是否小于0
+    const amountCol = inputHeaders.findIndex(h => h.name === '金额');
+    const remarkCol = inputHeaders.findIndex(h => h.name === '备注');
+    
+    if (amountCol >= 0 && remarkCol >= 0) {
+        const amountCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: amountCol });
+        const amountCell = inputWorksheet[amountCellAddress];
+        
+        const remarkCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: remarkCol });
+        const remarkCell = inputWorksheet[remarkCellAddress];
+        
+        if (amountCell && amountCell.v && parseFloat(amountCell.v) < 0 && 
+            remarkCell && remarkCell.v) {
+            const remark = remarkCell.v.toString();
+            let redInvoiceRemark = '';
+            
+            // 提取被红冲蓝字数电发票号码
+            if (remark.indexOf('被红冲蓝字数电发票号码：') > -1) {
+                const parts = remark.split('被红冲蓝字数电发票号码：');
+                if (parts.length > 1) {
+                    let invoicePart = parts[1];
+                    if (invoicePart.indexOf(' ') > -1) {
+                        redInvoiceRemark += '被红冲蓝字数电发票号码：' + 
+                            invoicePart.substring(0, invoicePart.indexOf(' ')).trim() + ' ';
+                    } else if (invoicePart.indexOf('\n') > -1) {
+                        redInvoiceRemark += '被红冲蓝字数电发票号码：' + 
+                            invoicePart.substring(0, invoicePart.indexOf('\n')).trim() + ' ';
+                    }
+                }
+            }
+            
+            // 提取红字发票信息确认单编号
+            if (remark.indexOf('红字发票信息确认单编号：') > -1) {
+                const parts = remark.split('红字发票信息确认单编号：');
+                if (parts.length > 1) {
+                    let confirmPart = parts[1];
+                    if (confirmPart.indexOf(' ') > -1) {
+                        redInvoiceRemark += '红字发票信息确认单编号：' + 
+                            confirmPart.substring(0, confirmPart.indexOf(' ')).trim();
+                    } else if (confirmPart.indexOf('\n') > -1) {
+                        redInvoiceRemark += '红字发票信息确认单编号：' + 
+                            confirmPart.substring(0, confirmPart.indexOf('\n')).trim();
+                    } else {
+                        redInvoiceRemark += '红字发票信息确认单编号：' + confirmPart.trim();
+                    }
+                }
+            }
+            
+            value = redInvoiceRemark.trim();
+        }
+    }
+}
+// 处理本地/外地
+else if (mapping.sourceType === 'locate') {
+    const remarkCol = inputHeaders.findIndex(h => h.name === '备注');
+    if (remarkCol >= 0) {
+        const remarkCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: remarkCol });
+        const remarkCell = inputWorksheet[remarkCellAddress];
+        
+        if (remarkCell && remarkCell.v) {
+            const remark = remarkCell.v.toString();
+            if (remark.indexOf('标志:') > -1) {
+                const parts = remark.split('标志:');
+                if (parts.length > 1) {
+                    let flagPart = parts[1];
+                    let flag = '';
+                    if (flagPart.indexOf(' ') > -1) {
+                        flag = flagPart.substring(0, flagPart.indexOf(' ')).trim();
+                    } else if (flagPart.indexOf('\n') > -1) {
+                        flag = flagPart.substring(0, flagPart.indexOf('\n')).trim();
+                    } else {
+                        flag = flagPart.trim();
+                    }
+                    
+                    // 根据标志设置本地/外地
+                    value = flag === '是' ? '外地' : '本地';
+                }
+            }
+        }
+    }
+}
+                            
+                            // 写入目标单元格
+                            if (value !== null) {
+                                const outputCellAddress = XLSX.utils.encode_cell({ r: outputRowIndex, c: mapping.outputCol });
+                                
+                                // 创建单元格对象
+                                clonedWorksheet[outputCellAddress] = { 
+                                    //t: typeof value === 'number' ? 'n' : 's', 
+                                    t: 's', 
+                                    v: value 
+                                };
+                            }
+                        }
+                        
+                        processedRows++;
+                    }
+                    
+                    // 调整输出表范围
+                    const outputRange = XLSX.utils.decode_range(clonedWorksheet['!ref']);
+                    const newLastRow = Math.max(outputRange.e.r, outputStartRow + processedRows - 1);
+                    outputRange.e.r = newLastRow;
+                    clonedWorksheet['!ref'] = XLSX.utils.encode_range(outputRange);
+                    
+                    // 完成处理
+                    showAlert(`数据处理完成！成功处理了 ${processedRows} 行数据。`, 'success');
+                    goToStep(5);
+                } catch (error) {
+                    console.error(error);
+                    showAlert(`处理过程中发生错误: ${error.message}`, 'danger');
+                } finally {
+                    hideLoading();
+                }
+            }
+            
+            // 下载处理后的文件
+            function downloadProcessedFile() {
+                if (!processedWorkbook) {
+                    alert('没有可下载的文件');
+                    return;
+                }
+                
+                // 将工作簿转换为二进制数据
+                const wbout = XLSX.write(processedWorkbook, { bookType: 'xlsx', type: 'array' });
+                
+                // 创建Blob和下载链接
+                const blob = new Blob([wbout], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                
+                // 创建下载链接并点击
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = '数据处理结果.xlsx';
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            }
+            
+            // 事件监听器
+            loadFilesBtn.addEventListener('click', async () => {
+                if (!inputFileEl.files.length || !outputFileEl.files.length) {
+                    alert('请选择输入文件和输出模板');
+                    return;
+                }
+                
+                showLoading();
+                
+                try {
+                    inputWorkbook = await readExcelFile(inputFileEl.files[0]);
+                    outputWorkbook = await readExcelFile(outputFileEl.files[0]);
+                    
+                    // 填充工作表下拉列表
+                    inputSheetEl.innerHTML = '';
+                    outputSheetEl.innerHTML = '';
+                    
+                    inputWorkbook.SheetNames.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        inputSheetEl.appendChild(option);
+                    });
+                    
+                    outputWorkbook.SheetNames.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        outputSheetEl.appendChild(option);
+                    });
+                    
+                    // 默认选择第一个工作表
+                    if (inputWorkbook.SheetNames.includes('信息汇总表')) {
+                        inputSheetEl.value = '信息汇总表';
+                    }
+                    
+                    if (outputWorkbook.SheetNames.includes('Sheet1')) {
+                        outputSheetEl.value = 'Sheet1';
+                    }
+                    
+                    goToStep(2);
+                } catch (error) {
+                    console.error(error);
+                    alert(`读取文件出错: ${error.message}`);
+                } finally {
+                    hideLoading();
+                }
+            });
+            
+            loadHeadersBtn.addEventListener('click', () => {
+                if (!inputWorkbook || !outputWorkbook) {
+                    alert('请先加载输入和输出文件');
+                    return;
+                }
+                
+                showLoading();
+                
+                try {
+                    const inputSheet = inputSheetEl.value;
+                    const outputSheet = outputSheetEl.value;
+                    const inputHeaderRow = parseInt(inputHeaderRowEl.value);
+                    const outputHeaderRow = parseInt(outputHeaderRowEl.value);
+                    
+                    // 获取表头
+                    inputHeaders = getHeaders(inputWorkbook, inputSheet, inputHeaderRow);
+                    outputHeaders = getHeaders(outputWorkbook, outputSheet, outputHeaderRow);
+                    
+                    if (inputHeaders.length === 0 || outputHeaders.length === 0) {
+                        alert('未能获取表头信息，请检查表头行设置');
+                        return;
+                    }
+                    
+                    // 填充映射表
+                    mappingTableEl.innerHTML = '';
+                    
+                    outputHeaders.forEach(header => {
+                        const row = document.createElement('tr');
+                        row.className = 'mapping-row';
+                        row.setAttribute('data-output-col', header.col);
+                        row.setAttribute('data-output-name', header.name);
+                        
+                        // 输出列名称
+                        const outputColCell = document.createElement('td');
+                        outputColCell.textContent = header.name;
+                        row.appendChild(outputColCell);
+                        
+                        // 映射来源下拉列表
+                        const sourceCell = document.createElement('td');
+                        const sourceSelect = document.createElement('select');
+                        sourceSelect.className = 'form-select';
+                        
+                        // 添加空选项
+                        const emptyOption = document.createElement('option');
+                        emptyOption.value = '';
+                        emptyOption.textContent = '-- 选择来源 --';
+                        sourceSelect.appendChild(emptyOption);
+                        
+                        // 添加输入列选项
+                        const columnsGroup = document.createElement('optgroup');
+                        columnsGroup.label = '输入文件列';
+                        
+                        inputHeaders.forEach(inputHeader => {
+                            const option = document.createElement('option');
+                            option.value = `column:${inputHeader.col}`;
+                            option.textContent = inputHeader.name;
+                            
+                            // 自动匹配具有相似名称的列
+                            if (
+                                (header.name === '客户' && inputHeader.name === '购买方名称') ||
+                                (header.name === '发票号码' && inputHeader.name === '数电票号码') ||
+                                (header.name === '开票时间' && inputHeader.name === '开票日期') ||
+                                (header.name === '专/普' && inputHeader.name === '发票票种') ||
+                                (header.name === '金额（含税）' && inputHeader.name === '价税合计') ||
+                                (header.name === '金额（不含税）' && inputHeader.name === '金额') ||
+                                (header.name === '税额' && inputHeader.name === '税额') ||
+                                (header.name === '税率' && inputHeader.name === '税率')
+                            ) {
+                                option.selected = true;
+                            }
+                            
+                            columnsGroup.appendChild(option);
+                        });
+                        
+                        sourceSelect.appendChild(columnsGroup);
+                        
+                        // 添加特殊处理选项
+                        if (header.name === '工程项目') {
+                            const specialGroup = document.createElement('optgroup');
+                            specialGroup.label = '特殊处理';
+                            
+                            const projectOption = document.createElement('option');
+                            projectOption.value = 'project:extract';
+                            projectOption.textContent = '从备注中提取工程项目';
+                            projectOption.selected = true;
+                            
+                            specialGroup.appendChild(projectOption);
+                            sourceSelect.appendChild(specialGroup);
+                        } else if (header.name === '工程地址') {
+                            const specialGroup = document.createElement('optgroup');
+                            specialGroup.label = '特殊处理';
+                            
+                            const addressOption = document.createElement('option');
+                            addressOption.value = 'address:extract';
+                            addressOption.textContent = '从备注中提取工程地址';
+                            addressOption.selected = true;
+                            
+                            specialGroup.appendChild(addressOption);
+                            sourceSelect.appendChild(specialGroup);
+                        } else if (header.name === '冲红发票备注') {
+                            const specialGroup = document.createElement('optgroup');
+                            specialGroup.label = '特殊处理';
+                            
+                            const ticketOption = document.createElement('option');
+                            ticketOption.value = 'ticket:extract';
+                            ticketOption.textContent = '从备注中提取冲红发票信息';
+                            ticketOption.selected = true;
+                            
+                            specialGroup.appendChild(ticketOption);
+                            sourceSelect.appendChild(specialGroup);
+                        } else if (header.name === '本地/外地') {
+                            const specialGroup = document.createElement('optgroup');
+                            specialGroup.label = '特殊处理';
+                            
+                            const locateOption = document.createElement('option');
+                            locateOption.value = 'locate:extract';
+                            locateOption.textContent = '从备注中提取本地/外地标志';
+                            locateOption.selected = true;
+                            
+                            specialGroup.appendChild(locateOption);
+                            sourceSelect.appendChild(specialGroup);
+                        }
+                        
+                        sourceCell.appendChild(sourceSelect);
+                        row.appendChild(sourceCell);
+                        
+                        mappingTableEl.appendChild(row);
+                    });
+                    
+                    // 加载保存的映射配置
+                    updateSavedMappingsList();
+                    
+                    goToStep(3);
+                } catch (error) {
+                    console.error(error);
+                    alert(`获取表头失败: ${error.message}`);
+                } finally {
+                    hideLoading();
+                }
+            });
+            
+            // 保存映射配置
+            saveMappingBtn.addEventListener('click', saveMappingConfig);
+            
+            // 加载映射配置
+            loadMappingBtn.addEventListener('click', () => {
+                const configName = savedMappingsEl.value;
+                if (configName) {
+                    loadMappingConfig(configName);
+                } else {
+                    alert('请选择要加载的配置');
+                }
+            });
+            
+            // 删除映射配置
+            deleteMappingBtn.addEventListener('click', deleteMappingConfig);
+            
+            // 处理数据
+            processDataBtn.addEventListener('click', processData);
+            
+            // 下载处理后的文件
+            downloadBtn.addEventListener('click', downloadProcessedFile);
+            
+            // 返回按钮
+            backToStep1Btn.addEventListener('click', () => goToStep(1));
+            backToStep2Btn.addEventListener('click', () => goToStep(2));
+            backToStep3Btn.addEventListener('click', () => goToStep(3));
+            backToStep4Btn.addEventListener('click', () => goToStep(4));
+            
+            // 前进按钮
+            goToStep4Btn.addEventListener('click', () => goToStep(4));
+            
+            // 开始新处理
+            startNewBtn.addEventListener('click', () => {
+                // 重置应用状态
+                inputWorkbook = null;
+                outputWorkbook = null;
+                inputHeaders = [];
+                outputHeaders = [];
+                processedWorkbook = null;
+                
+                // 重置文件输入
+                inputFileEl.value = '';
+                outputFileEl.value = '';
+                
+                // 返回第一步
+                goToStep(1);
+            });
+            
+            // 初始化
+            updateSavedMappingsList();
+        });
+    </script>
+</body>
+</html>
+
